@@ -91,35 +91,42 @@ function App() {
 
   return (
     <div className="app-container">
-      <h1>資産シミュレーション</h1>
-
-      <div className="form">
-        <label>
-          現在の年齢
-          <input
-            type="number"
-            value={age}
-            min={0}
-            max={120}
-            onChange={(e) => setAge(e.target.value === '' ? '' : Number(e.target.value))}
-          />
-        </label>
-
-        <label>
-          終了年齢
-          <input
-            type="number"
-            value={endAge}
-            min={0}
-            max={120}
-            onChange={(e) => setEndAge(e.target.value === '' ? '' : Number(e.target.value))}
-          />
-        </label>
+      <div className="app-header">
+        <span className="app-kicker">Private Wealth Simulation</span>
+        <h1>資産シミュレーション</h1>
+        <div className="app-divider" />
       </div>
 
-      <div className="product-picker">
-        <p className="product-picker-label">
-          商品（最大{MAX_PRODUCTS}つまで選択できます。選択中：{selectedNames.length}/{MAX_PRODUCTS}）
+      <div className="panel">
+        <p className="panel-title">基本情報</p>
+        <div className="form">
+          <label>
+            現在の年齢
+            <input
+              type="number"
+              value={age}
+              min={0}
+              max={120}
+              onChange={(e) => setAge(e.target.value === '' ? '' : Number(e.target.value))}
+            />
+          </label>
+
+          <label>
+            終了年齢
+            <input
+              type="number"
+              value={endAge}
+              min={0}
+              max={120}
+              onChange={(e) => setEndAge(e.target.value === '' ? '' : Number(e.target.value))}
+            />
+          </label>
+        </div>
+      </div>
+
+      <div className="panel">
+        <p className="panel-title">
+          商品の選択（最大{MAX_PRODUCTS}つまで選択できます。選択中：{selectedNames.length}/{MAX_PRODUCTS}）
         </p>
         <div className="product-list">
           {PRODUCTS.map((p) => {
@@ -164,17 +171,17 @@ function App() {
         <div className="chart-wrapper">
           <ResponsiveContainer width="100%" height={400}>
             <LineChart data={data} margin={{ top: 20, right: 30, left: 10, bottom: 10 }}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="age" label={{ value: '年齢', position: 'insideBottomRight', offset: -5 }} />
-              <YAxis width={90} tickFormatter={(v) => formatCompactYen(v)} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#e2d6b8" />
+              <XAxis dataKey="age" stroke="#8a7d56" label={{ value: '年齢', position: 'insideBottomRight', offset: -5, fill: '#8a7d56' }} />
+              <YAxis width={90} stroke="#8a7d56" tickFormatter={(v) => formatCompactYen(v)} />
               <Tooltip formatter={(value) => formatYen(value)} labelFormatter={(label) => `${label}歳`} />
               <Legend />
               <Line
                 type="monotone"
                 dataKey="amount"
                 name="予想資産額（合計）"
-                stroke="#2563eb"
-                strokeWidth={2}
+                stroke="#c9a14a"
+                strokeWidth={2.5}
                 dot={false}
               />
             </LineChart>
@@ -183,7 +190,7 @@ function App() {
       )}
 
       <div className="disclaimer">
-        <p className="disclaimer-title">⚠️ ご利用にあたっての注意</p>
+        <p className="disclaimer-title">ご利用にあたっての注意</p>
         <p>
           本シミュレーションで使用する年利は、各商品の過去の実績等を参考にした想定値（近似値）であり、将来の運用成果を保証するものではありません。実際の利回りは市場環境により変動します。
         </p>
