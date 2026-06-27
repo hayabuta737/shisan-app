@@ -16,12 +16,12 @@ const PRODUCTS = [
   { name: '円定期預金', rate: 0.8 },
   { name: '国債 固定5年', rate: 1.86 },
   { name: '社債 日本大手企業', rate: 2 },
+  { name: 'J-REIT（日本不動産）', rate: 3.5 },
   { name: '米国債10年', rate: 4 },
-  { name: 'J-REIT（日本不動産）', rate: 4 },
-  { name: '米ドル建て社債', rate: 5 },
   { name: 'eMAXIS SLIM 全世界株式（オルカン）', rate: 6 },
   { name: 'S&P500', rate: 7 },
-  { name: 'ビットコイン', rate: 100 },
+  { name: 'ビットコイン', rate: 50 },
+  { name: 'Mr.Leeに預ける', rate: 200 },
 ]
 
 const MAX_PRODUCTS = 5
