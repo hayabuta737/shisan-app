@@ -105,6 +105,31 @@ h1 {
   text-align: center;
 }
 
+.disclaimer {
+  margin-top: 32px;
+  padding: 16px 20px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: #7a4a00;
+  background: #fff3cd;
+  border: 1px solid #ffe58f;
+  border-radius: 8px;
+}
+
+.disclaimer-title {
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.disclaimer p {
+  margin: 0 0 8px;
+}
+
+.disclaimer p:last-child {
+  margin-bottom: 0;
+}
+
 @media (max-width: 600px) {
   .form {
     grid-template-columns: 1fr;
