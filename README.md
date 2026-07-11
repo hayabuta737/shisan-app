@@ -1,16 +1,60 @@
-# React + Vite
+# 資産シミュレーション (shisan-app)
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+年齢と投資商品・配分額を入力すると、複利計算による将来の資産推移を折れ線グラフで表示する単一ページWebアプリです。
 
-Currently, two official plugins are available:
+![React](https://img.shields.io/badge/React-19-blue) ![Vite](https://img.shields.io/badge/Vite-8-purple) ![Recharts](https://img.shields.io/badge/Recharts-3-gold)
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## 機能
 
-## React Compiler
+- **基本情報の入力** — 現在の年齢・終了年齢（0〜120歳）を指定
+- **投資商品の選択** — 預金・国債・社債・REIT・インデックス投資など9種類から最大5つまで選択し、商品ごとに配分額（円）を入力
+- **複利シミュレーション** — 商品ごとの想定年率で1年刻みの資産推移を計算し、合計額をグラフ表示
+- **入力バリデーション** — 年齢の異常値や配分額の上限（1商品100億円）をチェック
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+> ⚠️ **免責事項**: 本アプリで使用する年利は、各商品の過去の実績等を参考にした想定値（近似値）であり、将来の運用成果を保証するものではありません。特定の商品を推奨するものではなく、投資判断はご自身の責任で行ってください。
 
-## Expanding the Oxlint configuration
+## 使い方
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and Oxlint's TypeScript related rules in your project.
+```bash
+# 依存パッケージのインストール
+npm install
+
+# 開発サーバー起動（http://localhost:5173）
+npm run dev
+```
+
+### その他のコマンド
+
+```bash
+npm run build    # 本番ビルド（dist/ に出力）
+npm run lint     # oxlint による静的チェック
+npm test         # Vitest による単体テスト（複利計算ロジック）
+```
+
+## 技術構成
+
+| 項目 | 内容 |
+|---|---|
+| フレームワーク | React 19 + Vite 8 |
+| グラフ描画 | Recharts 3 |
+| テスト | Vitest |
+| Lint | oxlint |
+
+## プロジェクト構成
+
+```
+src/
+├── App.jsx                 アプリ本体（フォーム・商品選択・グラフ・バリデーション）
+├── App.css                 デザイン（ネイビー×ゴールド）
+├── index.css               グローバル変数・ベーススタイル
+└── lib/
+    ├── simulation.js       複利計算ロジック（UI非依存の純関数）
+    └── simulation.test.js  単体テスト
+```
+
+計算式: `将来価値 = 元本 × (1 + 年率/100) ^ 年数`
+（検算例: 100万円・年5%・10年 → 約162.9万円）
+
+## 開発について
+
+開発方針・ロードマップは [CLAUDE.md](CLAUDE.md) を参照してください。
