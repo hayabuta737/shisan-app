@@ -29,8 +29,9 @@ npm run dev
 
 ```bash
 npm run build    # 本番ビルド（dist/ に出力）
-npm run lint     # oxlint による静的チェック
-npm test         # Vitest による単体テスト（複利計算ロジック）
+npm run lint      # oxlint による静的チェック
+npm run typecheck # TypeScript 型チェック
+npm test          # Vitest による単体テスト（複利計算ロジック）
 ```
 
 ## 技術構成
@@ -50,8 +51,8 @@ src/
 ├── App.css                 デザイン（ネイビー×ゴールド）
 ├── index.css               グローバル変数・ベーススタイル
 └── lib/
-    ├── simulation.js       複利計算ロジック（UI非依存の純関数）
-    └── simulation.test.js  単体テスト
+    ├── simulation.ts       複利計算ロジック（UI非依存の純関数・TypeScript）
+    └── simulation.test.ts  単体テスト
 ```
 
 計算式: `将来価値 = 元本 × (1 + 年率/100) ^ 年数`

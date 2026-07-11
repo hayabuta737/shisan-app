@@ -25,15 +25,15 @@
 | フレームワーク | React 19.2 + Vite 8 |
 | グラフ | Recharts 3.9 |
 | Lint | oxlint(`.oxlintrc.json`) |
-| 言語 | JavaScript(.jsx)— TypeScript化はロードマップP2で段階導入 |
+| 言語 | UI: JavaScript(.jsx) / 計算ロジック: TypeScript(src/lib, strict)— UI側の.tsx化は今後段階導入 |
 | テスト | Vitest 4(`npm test`)— まず複利計算ロジックの単体テストを整備済み |
 | デプロイ | Vercel(公開URL: https://shisan-app-lilac.vercel.app — mainへのpushで自動デプロイ) |
 | リポジトリ | github.com/hayabuta737/shisan-app |
 
 ### 主要ファイル
 - `src/App.jsx` — アプリ本体(入力フォーム、商品選択、グラフ描画、バリデーション)
-- `src/lib/simulation.js` — 複利計算ロジック(UI非依存の純関数。テスト対象)
-- `src/lib/simulation.test.js` — simulation.js の単体テスト(Vitest)
+- `src/lib/simulation.ts` — 複利計算ロジック(UI非依存の純関数、TypeScript strict。テスト対象)
+- `src/lib/simulation.test.ts` — simulation.ts の単体テスト(Vitest)
 - `src/App.css` — ネイビー×ゴールドの高級感デザイン(このトーンを維持すること)
 - `src/index.css` — グローバル変数・ベーススタイル
 
@@ -42,6 +42,7 @@
 npm run dev      # 開発サーバー起動
 npm run build    # 本番ビルド
 npm run lint     # oxlintによる静的チェック
+npm run typecheck # TypeScript型チェック(tsc --noEmit)
 npm test         # Vitestによる単体テスト
 ```
 
@@ -70,7 +71,7 @@ npm test         # Vitestによる単体テスト
 - [x] **P1-2**: 商品利率を長期平均・一般値ベースに精査し、全商品に出典コメントを付与済み(ビットコインは年率50%→15%へ保守化)
 - [x] **P1-3**: 入力バリデーション強化済み(年齢の空文字・0〜120範囲外・非整数を検知、配分額は1商品100億円で上限クランプ)
 - [x] **P2-1**: Vitest導入済み。複利計算ロジックを`src/lib/simulation.js`に分離し、単体テスト10ケースを整備(`npm test`で通過)
-- [ ] **P2-2**: TypeScript未導入 → 計算ロジック部分から段階的に.tsx化
+- [x] **P2-2**: TypeScript導入済み。simulation.jsを.ts化(strict、Holding/GrowthRow型を定義)し、`npm run typecheck`を追加。UI(.jsx→.tsx)の移行は今後の課題
 - [x] **P3-1**: READMEをプロジェクト説明（機能・使い方・構成・免責）に書き換え済み。package.jsonのnameもtemp-app→shisan-appに修正済み
 - [x] **P3-2**: Vercelデプロイ確認済み。公開URL: https://shisan-app-lilac.vercel.app （GitHub連携済み、mainへのpushで自動デプロイ。P1修正版が公開中であることを確認）
 - [ ] **P3-3**: ルート直下のdocx/pptx(個人学習資料)→ `docs/`へ移動し`.gitignore`検討

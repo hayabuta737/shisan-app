@@ -1,0 +1,14 @@
+{
+  // TypeScriptの段階導入(CLAUDE.md P2-2)。
+  // まず計算ロジック(src/lib)のみを対象に厳格チェックする。
+  // UI(.jsx)の移行は今後のステップで include を広げて対応する。
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true
+  },
+  "include": ["src/lib/**/*.ts"]
+}
