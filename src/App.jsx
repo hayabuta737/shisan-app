@@ -9,6 +9,7 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts'
+import { simulateGrowth } from './lib/simulation'
 import './App.css'
 
 // 各商品の想定年率(rate, 単位%)。
@@ -82,22 +83,13 @@ function App() {
   }
 
   const data = useMemo(() => {
-    const rows = []
-    const years = endAge - age
-    if (age === '' || endAge === '' || years < 0 || selectedProducts.length === 0) {
-      return rows
-    }
-    for (let i = 0; i <= years; i++) {
-      const total = selectedProducts.reduce((sum, p) => {
-        const amount = allocations[p.name] || 0
-        return sum + amount * Math.pow(1 + p.rate / 100, i)
-      }, 0)
-      rows.push({
-        age: age + i,
-        amount: Math.round(total),
-      })
-    }
-    return rows
+    // 計算ロジックは src/lib/simulation.js に分離（テスト可能にするため）。
+    // 選択商品の年率と配分額を holdings 形式に変換して渡す。
+    const holdings = selectedProducts.map((p) => ({
+      rate: p.rate,
+      amount: allocations[p.name] || 0,
+    }))
+    return simulateGrowth(age, endAge, holdings)
   }, [age, endAge, selectedProducts, allocations])
 
   const formatCompactYen = (value) => {

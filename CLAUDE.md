@@ -27,12 +27,14 @@
 | グラフ | Recharts 3.9 |
 | Lint | oxlint(`.oxlintrc.json`) |
 | 言語 | JavaScript(.jsx)— TypeScript化はロードマップP2で段階導入 |
-| テスト | 未導入 — Vitest導入はロードマップP2 |
+| テスト | Vitest 4(`npm test`)— まず複利計算ロジックの単体テストを整備済み |
 | デプロイ | Vercel想定(未確認 — ロードマップP3で確定) |
 | リポジトリ | github.com/hayabuta737/shisan-app |
 
 ### 主要ファイル
-- `src/App.jsx` — アプリ本体(入力フォーム、商品選択、複利計算、グラフ)
+- `src/App.jsx` — アプリ本体(入力フォーム、商品選択、グラフ描画、バリデーション)
+- `src/lib/simulation.js` — 複利計算ロジック(UI非依存の純関数。テスト対象)
+- `src/lib/simulation.test.js` — simulation.js の単体テスト(Vitest)
 - `src/App.css` — ネイビー×ゴールドの高級感デザイン(このトーンを維持すること)
 - `src/index.css` — グローバル変数・ベーススタイル
 
@@ -41,6 +43,7 @@
 npm run dev      # 開発サーバー起動
 npm run build    # 本番ビルド
 npm run lint     # oxlintによる静的チェック
+npm test         # Vitestによる単体テスト
 ```
 
 ---
@@ -67,7 +70,7 @@ npm run lint     # oxlintによる静的チェック
 - [x] **P1-1**: `PRODUCTS`定数の「Mr.Leeに預ける(年利200%)」ジョーク値を削除済み
 - [x] **P1-2**: 商品利率を長期平均・一般値ベースに精査し、全商品に出典コメントを付与済み(ビットコインは年率50%→15%へ保守化)
 - [x] **P1-3**: 入力バリデーション強化済み(年齢の空文字・0〜120範囲外・非整数を検知、配分額は1商品100億円で上限クランプ)
-- [ ] **P2-1**: テストが皆無 → Vitest導入、まず複利計算ロジックの単体テストから
+- [x] **P2-1**: Vitest導入済み。複利計算ロジックを`src/lib/simulation.js`に分離し、単体テスト10ケースを整備(`npm test`で通過)
 - [ ] **P2-2**: TypeScript未導入 → 計算ロジック部分から段階的に.tsx化
 - [ ] **P3-1**: READMEがViteテンプレートのまま → プロジェクト説明に書き換え
 - [ ] **P3-2**: Vercelデプロイ状況が不明 → 確認し、未公開なら公開設定
