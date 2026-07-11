@@ -11,20 +11,39 @@ import {
 } from 'recharts'
 import './App.css'
 
+// 各商品の想定年率(rate, 単位%)。
+// すべて「長期平均・一般的な水準を参考にした想定値(近似値)」であり、
+// 将来の運用成果を保証するものではない(免責は画面下部に常時表示)。
+// 各行に「参考にした指数・期間の考え方」を出典コメントとして明記する
+// (CLAUDE.md 第3章「金融データの信頼性が最優先」ルールに基づく)。
 const PRODUCTS = [
+  // メガバンク普通預金金利の一般的水準(2025年時点で概ね0.1%前後)
   { name: '日本普通預金', rate: 0.1 },
-  { name: '円定期預金', rate: 0.8 },
-  { name: '国債 固定5年', rate: 1.86 },
-  { name: '社債 日本大手企業', rate: 2 },
-  { name: 'J-REIT（日本不動産）', rate: 3.5 },
-  { name: '米国債10年', rate: 4 },
-  { name: 'eMAXIS SLIM 全世界株式（オルカン）', rate: 6 },
-  { name: 'S&P500', rate: 7 },
-  { name: 'ビットコイン', rate: 50 },
-  { name: 'Mr.Leeに預ける', rate: 200 },
+  // メガバンク1年もの定期預金の一般的水準(日銀の利上げ後、概ね0.2〜0.3%)
+  { name: '円定期預金', rate: 0.3 },
+  // 財務省「個人向け国債(固定5年)」の近年の発行利率水準(概ね1%前後)
+  { name: '国債 固定5年', rate: 1.0 },
+  // 大手事業債(A格相当・年限5年程度)の利回り目安(概ね1.5%前後)
+  { name: '社債 日本大手企業', rate: 1.5 },
+  // 東証REIT指数の予想分配金利回りの一般的水準(概ね4%台)
+  { name: 'J-REIT（日本不動産）', rate: 4.0 },
+  // 米国10年国債利回りの近年の水準(概ね4%台)。※円/ドルの為替変動は非考慮
+  { name: '米国債10年', rate: 4.3 },
+  // MSCI ACWI(全世界株式)の長期年率リターン(配当込・名目)を保守的に設定
+  { name: 'eMAXIS SLIM 全世界株式（オルカン）', rate: 6.0 },
+  // S&P500の長期年率リターン(実質ベース)の一般的水準。名目より保守的に設定
+  { name: 'S&P500', rate: 7.0 },
+  // 暗号資産は極めて高ボラティリティで、将来の再現性がない。
+  // 過去の長期実績は年率数十%超だが、それをそのまま将来に当てはめるのは危険なため、
+  // 大幅に保守化した想定値とする(あくまで参考。投資判断は自己責任)。
+  { name: 'ビットコイン', rate: 15.0 },
 ]
 
 const MAX_PRODUCTS = 5
+// 1商品あたりの配分額の上限(100億円)。極端な入力を防ぐためのガード
+const MAX_ALLOCATION = 10_000_000_000
+// 年齢入力の上限
+const MAX_AGE = 120
 
 function App() {
   const [age, setAge] = useState(30)
@@ -57,7 +76,9 @@ function App() {
   }
 
   const setAllocation = (name, amount) => {
-    setAllocations((prev) => ({ ...prev, [name]: amount }))
+    // 上限(100億円)を超える入力はクランプして異常値を防ぐ
+    const capped = Math.min(amount, MAX_ALLOCATION)
+    setAllocations((prev) => ({ ...prev, [name]: capped }))
   }
 
   const data = useMemo(() => {
@@ -88,6 +109,20 @@ function App() {
   }
 
   const formatYen = (value) => `${value.toLocaleString()}円`
+
+  // 入力バリデーション。問題があれば最初のエラーメッセージを返し、なければ null。
+  // 年齢は「空・範囲外・非整数」を、期間は前後関係を、商品は選択有無をチェックする。
+  const validationError = (() => {
+    if (age === '') return '現在の年齢を入力してください。'
+    if (!Number.isInteger(age) || age < 0 || age > MAX_AGE)
+      return `現在の年齢は0〜${MAX_AGE}の整数で入力してください。`
+    if (endAge === '') return '終了年齢を入力してください。'
+    if (!Number.isInteger(endAge) || endAge < 0 || endAge > MAX_AGE)
+      return `終了年齢は0〜${MAX_AGE}の整数で入力してください。`
+    if (endAge < age) return '終了年齢は現在の年齢以上に設定してください。'
+    if (selectedProducts.length === 0) return '商品を1つ以上選択してください。'
+    return null
+  })()
 
   return (
     <div className="app-container">
@@ -144,17 +179,22 @@ function App() {
                   {p.name}（年{p.rate}%）
                 </label>
                 {checked && (
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    className="allocation-input"
-                    placeholder="配分額（円）"
-                    value={allocations[p.name] ? allocations[p.name].toLocaleString() : ''}
-                    onChange={(e) => {
-                      const digits = e.target.value.replace(/[^0-9]/g, '')
-                      setAllocation(p.name, digits === '' ? 0 : Number(digits))
-                    }}
-                  />
+                  <>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      className="allocation-input"
+                      placeholder="配分額（円）"
+                      value={allocations[p.name] ? allocations[p.name].toLocaleString() : ''}
+                      onChange={(e) => {
+                        const digits = e.target.value.replace(/[^0-9]/g, '')
+                        setAllocation(p.name, digits === '' ? 0 : Number(digits))
+                      }}
+                    />
+                    {allocations[p.name] === MAX_ALLOCATION && (
+                      <p className="allocation-note">配分額の上限は100億円です。</p>
+                    )}
+                  </>
                 )}
               </div>
             )
@@ -163,10 +203,8 @@ function App() {
         <p className="total-principal">初期投資額の合計：{totalPrincipal.toLocaleString()}円</p>
       </div>
 
-      {age !== '' && endAge !== '' && endAge < age ? (
-        <p className="error">終了年齢は現在の年齢以上に設定してください。</p>
-      ) : selectedProducts.length === 0 ? (
-        <p className="error">商品を1つ以上選択してください。</p>
+      {validationError ? (
+        <p className="error">{validationError}</p>
       ) : (
         <div className="chart-wrapper">
           <ResponsiveContainer width="100%" height={400}>

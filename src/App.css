@@ -146,6 +146,12 @@ h1 {
   font-family: 'Noto Sans JP', sans-serif;
 }
 
+.allocation-note {
+  margin: 0 0 0 26px;
+  font-size: 12px;
+  color: #a6772f;
+}
+
 .total-principal {
   margin-top: 20px;
   padding-top: 16px;
