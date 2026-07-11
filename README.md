@@ -2,6 +2,8 @@
 
 年齢と投資商品・配分額を入力すると、複利計算による将来の資産推移を折れ線グラフで表示する単一ページWebアプリです。
 
+**🌐 公開URL**: https://shisan-app-lilac.vercel.app
+
 ![React](https://img.shields.io/badge/React-19-blue) ![Vite](https://img.shields.io/badge/Vite-8-purple) ![Recharts](https://img.shields.io/badge/Recharts-3-gold)
 
 ## 機能

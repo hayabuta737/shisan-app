@@ -27,7 +27,7 @@
 | Lint | oxlint(`.oxlintrc.json`) |
 | 言語 | JavaScript(.jsx)— TypeScript化はロードマップP2で段階導入 |
 | テスト | Vitest 4(`npm test`)— まず複利計算ロジックの単体テストを整備済み |
-| デプロイ | Vercel想定(未確認 — ロードマップP3で確定) |
+| デプロイ | Vercel(公開URL: https://shisan-app-lilac.vercel.app — mainへのpushで自動デプロイ) |
 | リポジトリ | github.com/hayabuta737/shisan-app |
 
 ### 主要ファイル
@@ -72,7 +72,7 @@ npm test         # Vitestによる単体テスト
 - [x] **P2-1**: Vitest導入済み。複利計算ロジックを`src/lib/simulation.js`に分離し、単体テスト10ケースを整備(`npm test`で通過)
 - [ ] **P2-2**: TypeScript未導入 → 計算ロジック部分から段階的に.tsx化
 - [x] **P3-1**: READMEをプロジェクト説明（機能・使い方・構成・免責）に書き換え済み。package.jsonのnameもtemp-app→shisan-appに修正済み
-- [ ] **P3-2**: Vercelデプロイ状況が不明 → 確認し、未公開なら公開設定
+- [x] **P3-2**: Vercelデプロイ確認済み。公開URL: https://shisan-app-lilac.vercel.app （GitHub連携済み、mainへのpushで自動デプロイ。P1修正版が公開中であることを確認）
 - [ ] **P3-3**: ルート直下のdocx/pptx(個人学習資料)→ `docs/`へ移動し`.gitignore`検討
 
 ---
