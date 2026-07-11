@@ -52,7 +52,11 @@ function App() {
   const [selectedNames, setSelectedNames] = useState([PRODUCTS[0].name])
   const [allocations, setAllocations] = useState({ [PRODUCTS[0].name]: 1000000 })
 
-  const selectedProducts = PRODUCTS.filter((p) => selectedNames.includes(p.name))
+  // useMemoで参照を安定させ、下のdata計算が選択変更時のみ再実行されるようにする
+  const selectedProducts = useMemo(
+    () => PRODUCTS.filter((p) => selectedNames.includes(p.name)),
+    [selectedNames],
+  )
   const totalPrincipal = selectedNames.reduce((sum, name) => sum + (allocations[name] || 0), 0)
 
   const toggleProduct = (name) => {
@@ -133,7 +137,7 @@ function App() {
               type="number"
               value={age}
               min={0}
-              max={120}
+              max={MAX_AGE}
               onChange={(e) => setAge(e.target.value === '' ? '' : Number(e.target.value))}
             />
           </label>
@@ -144,7 +148,7 @@ function App() {
               type="number"
               value={endAge}
               min={0}
-              max={120}
+              max={MAX_AGE}
               onChange={(e) => setEndAge(e.target.value === '' ? '' : Number(e.target.value))}
             />
           </label>
