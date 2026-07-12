@@ -352,6 +352,52 @@ h1 {
   letter-spacing: 0.4px;
 }
 
+.assets-section {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid #e2d6b8;
+}
+
+.assets-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--navy);
+  margin: 0 0 8px;
+}
+
+.assets-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.asset-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 13px;
+  color: #5c5440;
+}
+
+.asset-name {
+  flex: 1;
+  min-width: 0;
+}
+
+.asset-row input {
+  width: 44%;
+  flex-shrink: 0;
+  padding: 8px 10px;
+  font-size: 14px;
+  border-radius: 2px;
+  border: 1px solid #d8cba0;
+  background: #fff;
+  font-family: 'Noto Sans JP', sans-serif;
+  text-align: right;
+}
+
 .chart-wrapper {
   background: var(--cream);
   border: 1px solid var(--gold);
@@ -404,7 +450,8 @@ h1 {
 @media (max-width: 600px) {
   .form,
   .product-list,
-  .summary-cards {
+  .summary-cards,
+  .assets-grid {
     grid-template-columns: 1fr;
   }
 

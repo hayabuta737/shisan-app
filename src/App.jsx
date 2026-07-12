@@ -14,11 +14,12 @@ import {
   buildYearlySchedule,
   lifetimeRequired,
   requiredRemainingLine,
-  simulateAssets,
+  simulateActual,
   findRequiredMonthlyContribution,
   findCrossoverAge,
   householdSize as calcHouseholdSize,
   livingCostDefault as calcLivingCostDefault,
+  incomeDefault as calcIncomeDefault,
   SCENARIO_RATES,
 } from './lib/lifeplan'
 import { LIFE_EXPECTANCY, PENSION_MONTHLY } from './data/officialData'
@@ -83,7 +84,8 @@ const sanitizeAmount = (raw) => {
 function App() {
   // ── ステップ1: 必要額フォームの状態(文字列で保持し、空=未入力=政府データ補完) ──
   const [ageStr, setAgeStr] = useState('')
-  const [livingCostStr, setLivingCostStr] = useState('')
+  const [incomeStr, setIncomeStr] = useState('') // 世帯収入(月・手取り)
+  const [expenseStr, setExpenseStr] = useState('') // 世帯支出(月)
   const [lifespan, setLifespan] = useState(100)
   const [hasSpouse, setHasSpouse] = useState(true)
   const [childrenCount, setChildrenCount] = useState(0)
@@ -97,6 +99,9 @@ function App() {
   // ── ステップ2: 商品選択(旧v1を吸収) ──
   const [selectedNames, setSelectedNames] = useState([])
   const [allocations, setAllocations] = useState({})
+  // 現在の金融資産: 商品別の保有額 + その他(現金など)。開始残高に使う
+  const [holdings, setHoldings] = useState({})
+  const [otherAssetsStr, setOtherAssetsStr] = useState('')
 
   const selectedProducts = useMemo(
     () => PRODUCTS.filter((p) => selectedNames.includes(p.name)),
@@ -171,13 +176,24 @@ function App() {
     : 0
   const pensionMonthly = pensionSelf + pensionSpouse
 
+  // 現在の金融資産(開始残高) = 商品別の保有額 + その他。上限クランプは入力側で実施。
+  const startingAssets =
+    PRODUCTS.reduce((sum, p) => sum + (holdings[p.name] || 0), 0) + (parseNum(otherAssetsStr) ?? 0)
+
+  // 世帯収入・支出(月)。未入力は政府データ(可処分所得/家計調査)で補完。
+  const monthlyIncome = parseNum(incomeStr) ?? calcIncomeDefault(hasSpouse, childrenCount)
+  const monthlyExpense = parseNum(expenseStr) ?? calcLivingCostDefault(hasSpouse, childrenCount)
+  const actualMonthlySaving = monthlyIncome - monthlyExpense
+
   // ── 計算(ステップ3) ──
   const result = useMemo(() => {
     if (currentAge === undefined || validationError) return null
     const input = applyDefaults({
       currentAge,
       lifespan,
-      monthlyLivingCost: parseNum(livingCostStr),
+      monthlyExpense,
+      monthlyIncome,
+      startingAssets,
       hasSpouse,
       childrenCount,
       educationPolicy,
@@ -189,12 +205,13 @@ function App() {
     })
     const schedule = buildYearlySchedule(input)
     const required = lifetimeRequired(schedule)
-    const monthly = findRequiredMonthlyContribution(input, schedule, standardRate)
+    const minMonthly = findRequiredMonthlyContribution(input, schedule, standardRate)
     const line = requiredRemainingLine(schedule, standardRate)
+    // 実際の推移: 世帯収入−世帯支出を貯蓄として積み上げる(3シナリオ)
     const sims = {
-      pessimistic: simulateAssets(input, schedule, monthly ?? 0, pessimisticRate),
-      standard: simulateAssets(input, schedule, monthly ?? 0, standardRate),
-      optimistic: simulateAssets(input, schedule, monthly ?? 0, optimisticRate),
+      pessimistic: simulateActual(input, schedule, pessimisticRate),
+      standard: simulateActual(input, schedule, standardRate),
+      optimistic: simulateActual(input, schedule, optimisticRate),
     }
     const crossoverAge = findCrossoverAge(sims.standard.rows, line)
     // グラフ用に年齢で結合
@@ -206,13 +223,22 @@ function App() {
       optimistic: sims.optimistic.rows[i]?.assets,
       required: lineByAge.get(row.age),
     }))
-    return { input, required, monthly, crossoverAge, chart, gain: sims.standard.totalInterest }
-  }, [currentAge, validationError, lifespan, livingCostStr, hasSpouse, childrenCount, educationPolicy, retireAge, pensionMonthly, extraEvents, standardRate, pessimisticRate, optimisticRate])
+    return {
+      input,
+      required,
+      minMonthly,
+      actualMonthlySaving,
+      crossoverAge,
+      chart,
+      gain: sims.standard.totalInterest,
+    }
+  }, [currentAge, validationError, lifespan, monthlyExpense, monthlyIncome, startingAssets, actualMonthlySaving, hasSpouse, childrenCount, educationPolicy, retireAge, pensionMonthly, extraEvents, standardRate, pessimisticRate, optimisticRate])
 
   // 補完値の案内用。計算(lifeplan.applyDefaults)と同じ関数を使い、表示と計算の
   // 世帯人数ロジックを一元化する
   const householdSize = calcHouseholdSize(hasSpouse, childrenCount)
-  const livingCostDefault = calcLivingCostDefault(hasSpouse, childrenCount)
+  const expenseDefault = calcLivingCostDefault(hasSpouse, childrenCount)
+  const incomeHintDefault = calcIncomeDefault(hasSpouse, childrenCount)
 
   const crossoverYear =
     result && result.crossoverAge !== null
@@ -221,6 +247,10 @@ function App() {
 
   const updateExtraEvent = (idx, field, value) => {
     setExtraEvents((prev) => prev.map((ev, i) => (i === idx ? { ...ev, [field]: value } : ev)))
+  }
+
+  const setHolding = (name, amount) => {
+    setHoldings((prev) => ({ ...prev, [name]: Math.min(amount, MAX_ALLOCATION) }))
   }
 
   return (
@@ -255,13 +285,27 @@ function App() {
           </label>
 
           <label>
-            基本生活費（月額・家賃/ローン含む）
+            世帯収入（月・手取り）
             <input
               type="text"
               inputMode="numeric"
-              value={livingCostStr === '' ? '' : Number(livingCostStr).toLocaleString()}
-              placeholder={`未入力: ${livingCostDefault.toLocaleString()}円`}
-              onChange={(e) => setLivingCostStr(sanitizeAmount(e.target.value))}
+              value={incomeStr === '' ? '' : Number(incomeStr).toLocaleString()}
+              placeholder={`未入力: ${incomeHintDefault.toLocaleString()}円`}
+              onChange={(e) => setIncomeStr(sanitizeAmount(e.target.value))}
+            />
+            <span className="field-hint">
+              手取りの世帯月収。補完値は総務省・家計調査(2024年)の勤労者世帯の可処分所得です
+            </span>
+          </label>
+
+          <label>
+            世帯支出（月・家賃/ローン含む）
+            <input
+              type="text"
+              inputMode="numeric"
+              value={expenseStr === '' ? '' : Number(expenseStr).toLocaleString()}
+              placeholder={`未入力: ${expenseDefault.toLocaleString()}円`}
+              onChange={(e) => setExpenseStr(sanitizeAmount(e.target.value))}
             />
             <span className="field-hint">
               補完値は総務省・家計調査(2024年)の{householdSize}人世帯平均です
@@ -458,6 +502,43 @@ function App() {
           期待利回り（配分加重平均）: 年{standardRate.toFixed(1)}%
           {totalPrincipal > 0 && ` ／ 配分合計: ${totalPrincipal.toLocaleString()}円`}
         </p>
+
+        <div className="assets-section">
+          <p className="assets-title">現在の金融資産（今持っている額・任意）</p>
+          <p className="panel-note">
+            入力するとその額を開始残高としてシミュレーションします（未入力は0円）。同じ運用商品の項目に加え、それ以外は「その他」にまとめて入力してください。なお計算上、保有資産は上の「期待利回り」で成長すると仮定します。
+          </p>
+          <div className="assets-grid">
+            {PRODUCTS.map((p) => (
+              <label key={p.name} className="asset-row">
+                <span className="asset-name">{p.name}</span>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="0"
+                  value={holdings[p.name] ? holdings[p.name].toLocaleString() : ''}
+                  onChange={(e) => {
+                    const digits = sanitizeAmount(e.target.value)
+                    setHolding(p.name, digits === '' ? 0 : Number(digits))
+                  }}
+                />
+              </label>
+            ))}
+            <label className="asset-row">
+              <span className="asset-name">その他（現金・預金など）</span>
+              <input
+                type="text"
+                inputMode="numeric"
+                placeholder="0"
+                value={otherAssetsStr === '' ? '' : Number(otherAssetsStr).toLocaleString()}
+                onChange={(e) => setOtherAssetsStr(sanitizeAmount(e.target.value))}
+              />
+            </label>
+          </div>
+          <p className="total-principal">
+            現在の金融資産の合計：{startingAssets.toLocaleString()}円
+          </p>
+        </div>
       </div>
 
       {/* ───────── ステップ3: 自由になる日を見る ───────── */}
@@ -478,14 +559,17 @@ function App() {
                 <p className="summary-card-sub">寿命{result.input.lifespan}歳までの支出 − 年金</p>
               </div>
               <div className="summary-card">
-                <p className="summary-card-label">そのための毎月積立額</p>
+                <p className="summary-card-label">あなたの毎月の貯蓄額</p>
                 <p className="summary-card-value">
-                  {result.monthly === null ? '算出不可' : `月${formatCompactYen(result.monthly)}`}
+                  {result.actualMonthlySaving < 0
+                    ? `−${formatCompactYen(-result.actualMonthlySaving)}`
+                    : `月${formatCompactYen(result.actualMonthlySaving)}`}
                 </p>
                 <p className="summary-card-sub">
-                  {result.monthly === null
-                    ? 'リタイア済みの場合など、積立期間が取れない入力です'
-                    : `年${standardRate.toFixed(1)}%運用・寿命まで資産が尽きない最小額`}
+                  世帯収入 − 世帯支出。
+                  {result.minMonthly === null
+                    ? ''
+                    : ` 必要な最低額は月${formatCompactYen(result.minMonthly)}`}
                 </p>
               </div>
               <div className="summary-card">
@@ -502,14 +586,14 @@ function App() {
                   {crossoverYear}年（{result.crossoverAge}歳）
                 </p>
                 <p className="crossover-sub">
-                  資産がその後の人生に必要な額を上回り、以後は働かなくてもお金が尽きない見込みの時点です
+                  今の貯蓄ペースなら、この時点で資産がその後の人生に必要な額を上回り、以後は働かなくてもお金が尽きない見込みです
                 </p>
               </div>
             ) : (
               <div className="crossover-banner">
                 <p className="crossover-label">安心ラインへの道のり</p>
                 <p className="crossover-sub">
-                  現在の入力では寿命までに安心ラインへ到達しません。リタイア年齢を遅らせる・生活費を見直すなど、条件を変えて試してみてください。
+                  今の貯蓄ペースでは寿命までに安心ラインへ到達しません。世帯支出を見直す・リタイア年齢を遅らせる・収入や運用利回りを上げるなど、条件を変えて試してみてください。
                 </p>
               </div>
             )}
@@ -543,7 +627,7 @@ function App() {
                 </LineChart>
               </ResponsiveContainer>
               <p className="chart-note">
-                将来は不確実です。幅で考えることが大切です。「安心ライン」はその年齢時点から寿命までに必要な残額（運用しながら取り崩す前提の割引現在価値）です。
+                将来は不確実です。幅で考えることが大切です。3本の曲線は現在の金融資産を起点に「世帯収入−世帯支出」を貯蓄・運用した資産の推移です。「安心ライン」はその年齢で働くのをやめた場合に、以降の生活（支出−年金）を寿命まで賄うのに必要な額です。曲線が安心ラインを上回った時点が「自由になる日」です。
               </p>
             </div>
           </>
@@ -556,7 +640,7 @@ function App() {
           本シミュレーションで使用する年利は、各商品の過去の実績等を参考にした想定値（近似値）であり、将来の運用成果を保証するものではありません。実際の利回りは市場環境により変動します。
         </p>
         <p>
-          生活費・教育費・年金などの補完値は政府統計（総務省家計調査、文科省子供の学習費調査、厚労省年金額改定等）に基づく平均値です。計算にはインフレ率年2%の仮定を含みます。世帯人数と年金は入力（配偶者の有無・子どもの人数）に応じて計算します。子どもは現在0歳・保有資産0円からの積立開始と仮定しています。
+          世帯収入・支出・教育費・年金などの補完値は政府統計（総務省家計調査、文科省子供の学習費調査、厚労省年金額改定等）に基づく平均値です。計算にはインフレ率年2%の仮定を含み、世帯収入・支出は名目で年2%成長する一方、年金は名目固定（インフレ非連動）と仮定します。収入・生活費の既定値は世帯構成の細かな違い（共働きか否か等）までは反映していません。世帯人数・収入・年金は入力（配偶者の有無・子どもの人数）に応じて計算します。子どもは現在0歳と仮定しています。
         </p>
         <p>
           また、本アプリは特定の商品を推奨するものでは決してありません。資産運用・投資の判断は、必ずお客様ご自身の責任において実施してください。

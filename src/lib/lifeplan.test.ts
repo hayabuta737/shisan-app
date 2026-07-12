@@ -4,11 +4,13 @@ import {
   applyDefaults,
   householdSize,
   livingCostDefault,
+  incomeDefault,
   educationCostAtChildAge,
   buildYearlySchedule,
   lifetimeRequired,
   requiredRemainingLine,
   simulateAssets,
+  simulateActual,
   findRequiredMonthlyContribution,
   findCrossoverAge,
   computeSummary,
@@ -16,16 +18,19 @@ import {
 } from './lifeplan'
 import {
   LIVING_COST_MONTHLY,
+  HOUSEHOLD_INCOME_MONTHLY,
   EDUCATION_COST_YEARLY,
   UNIVERSITY_COST,
   PENSION_MONTHLY,
 } from '../data/officialData.js'
 
-// テスト用の基本入力(インフレ0%・子ども0人など、手計算しやすい値)
+// テスト用の基本入力(インフレ0%・子ども0人・収入0など、手計算しやすい値)
 const base: LifeplanInput = {
   currentAge: 60,
   lifespan: 64,
-  monthlyLivingCost: 100_000,
+  monthlyExpense: 100_000,
+  monthlyIncome: 0, // simulateActualを使うテストでは個別に上書きする
+  startingAssets: 0,
   hasSpouse: true,
   childrenCount: 0,
   educationPolicy: 'public',
@@ -49,7 +54,10 @@ describe('applyDefaults（政府データによる補完）', () => {
   it('未入力は公式データで補完される（生活費=夫婦2人世帯、年金=モデル年金、寿命=100歳）', () => {
     const d = applyDefaults({})
     // 子ども0人 → 世帯人数2人 → 家計調査の2人世帯 268,755円/月
-    expect(d.monthlyLivingCost).toBe(LIVING_COST_MONTHLY.byMembers[2])
+    expect(d.monthlyExpense).toBe(LIVING_COST_MONTHLY.byMembers[2])
+    // 収入は二人以上勤労者世帯の可処分所得、資産は0で開始
+    expect(d.monthlyIncome).toBe(HOUSEHOLD_INCOME_MONTHLY.multiWorker)
+    expect(d.startingAssets).toBe(0)
     expect(d.pensionMonthly).toBe(PENSION_MONTHLY.modelCouple)
     expect(d.lifespan).toBe(100)
     expect(d.retireAge).toBe(65)
@@ -58,18 +66,19 @@ describe('applyDefaults（政府データによる補完）', () => {
 
   it('子ども2人 → 世帯人数4人の生活費(341,400円/月)で補完される', () => {
     const d = applyDefaults({ childrenCount: 2 })
-    expect(d.monthlyLivingCost).toBe(LIVING_COST_MONTHLY.byMembers[4])
+    expect(d.monthlyExpense).toBe(LIVING_COST_MONTHLY.byMembers[4])
   })
 
-  it('独身・子0人 → 単身世帯の生活費・本人分のみの年金で補完される', () => {
+  it('独身・子0人 → 単身世帯の生活費・収入・本人分のみの年金で補完される', () => {
     const d = applyDefaults({ hasSpouse: false })
-    expect(d.monthlyLivingCost).toBe(LIVING_COST_MONTHLY.single) // 169,547
+    expect(d.monthlyExpense).toBe(LIVING_COST_MONTHLY.single) // 169,547
+    expect(d.monthlyIncome).toBe(HOUSEHOLD_INCOME_MONTHLY.single) // 305,863
     expect(d.pensionMonthly).toBe(PENSION_MONTHLY.selfModel) // 166,671(本人分のみ)
   })
 
   it('配偶者あり・子0人 → 2人世帯の生活費・年金は本人分+配偶者分(=モデル年金)', () => {
     const d = applyDefaults({ hasSpouse: true })
-    expect(d.monthlyLivingCost).toBe(LIVING_COST_MONTHLY.byMembers[2])
+    expect(d.monthlyExpense).toBe(LIVING_COST_MONTHLY.byMembers[2])
     // 検算: selfModel(166,671) + spouseBasic(70,608) = 237,279 = modelCouple
     expect(d.pensionMonthly).toBe(PENSION_MONTHLY.selfModel + PENSION_MONTHLY.spouseBasic)
     expect(d.pensionMonthly).toBe(PENSION_MONTHLY.modelCouple)
@@ -77,7 +86,22 @@ describe('applyDefaults（政府データによる補完）', () => {
 
   it('独身・子1人 → 世帯人数2人の生活費で補完される', () => {
     const d = applyDefaults({ hasSpouse: false, childrenCount: 1 })
-    expect(d.monthlyLivingCost).toBe(LIVING_COST_MONTHLY.byMembers[2])
+    expect(d.monthlyExpense).toBe(LIVING_COST_MONTHLY.byMembers[2])
+  })
+
+  it('入力した現在の金融資産・収入・支出はそのまま使われる', () => {
+    const d = applyDefaults({ startingAssets: 5_000_000, monthlyIncome: 400_000, monthlyExpense: 250_000 })
+    expect(d.startingAssets).toBe(5_000_000)
+    expect(d.monthlyIncome).toBe(400_000)
+    expect(d.monthlyExpense).toBe(250_000)
+  })
+})
+
+describe('incomeDefault（世帯収入の既定値）', () => {
+  it('1人世帯は単身勤労者、2人以上は二人以上勤労者の可処分所得', () => {
+    expect(incomeDefault(false, 0)).toBe(HOUSEHOLD_INCOME_MONTHLY.single)
+    expect(incomeDefault(true, 0)).toBe(HOUSEHOLD_INCOME_MONTHLY.multiWorker)
+    expect(incomeDefault(false, 2)).toBe(HOUSEHOLD_INCOME_MONTHLY.multiWorker) // 独身+子2=3人
   })
 })
 
@@ -185,6 +209,34 @@ describe('simulateAssets（資産曲線）', () => {
   })
 })
 
+describe('simulateActual（実際の資産推移: 収入−支出で貯蓄）', () => {
+  it('利回り0%: 収入15万−支出10万=月5万貯蓄を2年、以後取り崩し（手計算）', () => {
+    const input = { ...base, monthlyIncome: 150_000 }
+    const schedule = buildYearlySchedule(input)
+    const sim = simulateActual(input, schedule, 0)
+    expect(sim.rows.map((r) => r.assets)).toEqual([
+      0, // 60歳(起点)
+      600_000, // 61歳: +（15万−10万）×12
+      1_200_000, // 62歳: +60万
+      0, // 63歳: リタイア後 -120万(支出のみ)
+      -1_200_000, // 64歳: -120万 → 枯渇
+    ])
+    expect(sim.depleted).toBe(true)
+    expect(sim.totalContributed).toBe(1_200_000) // プラス収支の累計
+  })
+
+  it('現在の金融資産を開始残高として使う（収支トントン→リタイア後に取り崩し）', () => {
+    // 収入=支出(月10万)でリタイア前の貯蓄0。開始240万でリタイア後2年を賄う
+    const input = { ...base, monthlyIncome: 100_000, startingAssets: 2_400_000 }
+    const schedule = buildYearlySchedule(input)
+    const sim = simulateActual(input, schedule, 0)
+    expect(sim.rows.map((r) => r.assets)).toEqual([
+      2_400_000, 2_400_000, 2_400_000, 1_200_000, 0,
+    ])
+    expect(sim.depleted).toBe(false)
+  })
+})
+
 describe('findRequiredMonthlyContribution（必要な毎月積立額）', () => {
   it('利回り0%: リタイア後2年の生活費240万 ÷ 積立24か月 = 月10万円（手計算）', () => {
     const schedule = buildYearlySchedule(base)
@@ -193,6 +245,13 @@ describe('findRequiredMonthlyContribution（必要な毎月積立額）', () => 
 
   it('年金で支出が全て賄えるなら積立は0円', () => {
     const input = { ...base, pensionMonthly: 100_000 }
+    const schedule = buildYearlySchedule(input)
+    expect(findRequiredMonthlyContribution(input, schedule, 0)).toBe(0)
+  })
+
+  it('現在の金融資産が十分あれば追加の積立は0円（startingAssetsが起点になる）', () => {
+    // リタイア後2年の支出240万を、開始残高240万で賄える → 積立不要
+    const input = { ...base, startingAssets: 2_400_000 }
     const schedule = buildYearlySchedule(input)
     expect(findRequiredMonthlyContribution(input, schedule, 0)).toBe(0)
   })
@@ -249,16 +308,27 @@ describe('findCrossoverAge（クロスオーバーポイント）', () => {
 })
 
 describe('computeSummary（サマリーカード一式）', () => {
-  it('現実的な入力で3つの数値と到達年齢が矛盾なく計算される', () => {
+  it('現実的な入力（政府データ補完）で各数値と到達年齢が矛盾なく計算される', () => {
     const s = computeSummary({ currentAge: 30, childrenCount: 1 })
     expect(s.lifetimeRequired).toBeGreaterThan(0)
-    expect(s.monthlyContribution).not.toBeNull()
-    expect(s.monthlyContribution!).toBeGreaterThan(0)
+    expect(s.requiredMonthlyContribution).not.toBeNull()
+    expect(s.requiredMonthlyContribution!).toBeGreaterThan(0)
+    // 世帯収入(可処分所得) > 世帯支出 なので貯蓄余力はプラス
+    expect(s.actualMonthlySaving).toBeGreaterThan(0)
     expect(s.investmentGain).toBeGreaterThan(0)
     expect(s.crossoverAge).not.toBeNull()
     expect(s.crossoverAge!).toBeGreaterThan(30)
-    // 回帰テスト: 割引前のバグでは crossoverAge が寿命(100歳)に張り付いていた。
-    // 「枯渇しない最小積立」ならリタイア年齢(65歳)近辺で自由になるはず
-    expect(s.crossoverAge!).toBeLessThanOrEqual(66)
+    expect(s.crossoverAge!).toBeLessThanOrEqual(100)
+  })
+
+  it('支出が収入を上回ると貯蓄余力がマイナスになり、資産が枯渇して到達しない', () => {
+    const s = computeSummary({
+      currentAge: 40,
+      monthlyIncome: 200_000,
+      monthlyExpense: 400_000,
+      startingAssets: 0,
+    })
+    expect(s.actualMonthlySaving).toBe(-200_000)
+    expect(s.crossoverAge).toBeNull()
   })
 })

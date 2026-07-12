@@ -9,15 +9,22 @@
 // 2. 世帯人数は「本人(+配偶者) + 子どもの人数」で算出する。
 //    hasSpouse=true なら本人+配偶者の2人、false なら本人1人を基数とし、
 //    生活費(家計調査)と年金の既定値を世帯構成に合わせて補完する。
-// 3. リタイア前の生活費・教育費は勤労収入で賄われるとみなし、資産からは
-//    支出しない。リタイア後は「支出 − 年金」を資産から取り崩す。
-// 4. 年次モデル: 毎年末に「運用益 → 積立 → 取り崩し」の順で反映する。
-// 5. 現在の保有資産は0円から開始する(v2.0の入力フォームに保有資産の
-//    項目がないため)。既にリタイア済みの入力では積立フェーズが存在せず、
-//    必要積立額が算出不能(null)になり得る。
+// 3. 年次モデル: 毎年末に「運用益 → 収支の反映」の順。
+//    実際の推移(simulateActual)では、リタイア前は(世帯収入−世帯支出)を貯蓄として
+//    資産に加え、リタイア後は(年金−世帯支出)を反映(不足なら取り崩す)。
+// 4. 現在の金融資産(startingAssets)を開始残高とする。
+// 5. 「安心ライン/クロスオーバー」は Financial Independence の考え方:
+//    その年齢で働くのをやめた場合に、以降の(支出−年金)を寿命まで賄えるだけの
+//    資産があるか、で判定する(requiredRemainingLineは勤労収入を除いた必要残額)。
+// 6. 世帯収入・支出はインフレ率で名目成長させる(実質は一定と仮定)。
+//    一方、年金は名目固定(インフレ非連動)とする。長生き・高インフレ時に
+//    保守的(必要額が大きめ)になる。
+// 7. 現在の金融資産(startingAssets)は、商品別の内訳にかかわらず、選択した
+//    運用商品の期待利回り(標準シナリオ)で成長すると仮定する(簡略化)。
 
 import {
   LIVING_COST_MONTHLY,
+  HOUSEHOLD_INCOME_MONTHLY,
   EDUCATION_COST_YEARLY,
   UNIVERSITY_COST,
   PENSION_MONTHLY,
@@ -34,7 +41,9 @@ export interface ExtraEvent {
 export interface LifeplanInput {
   currentAge: number
   lifespan: number // 寿命想定(90/95/100)
-  monthlyLivingCost: number // 基本生活費(月額円)
+  monthlyExpense: number // 世帯支出(月額円・家賃/ローン含む)
+  monthlyIncome: number // 世帯収入(手取り月額円・リタイア前の勤労収入)
+  startingAssets: number // 現在の金融資産(シミュレーションの開始残高)
   hasSpouse: boolean // 配偶者の有無(世帯人数・年金の既定値に影響)
   childrenCount: number // 0〜4
   educationPolicy: 'public' | 'private' // 公立中心/私立中心
@@ -48,8 +57,9 @@ export interface LifeplanInput {
 export interface YearRow {
   age: number
   expense: number // その年の支出合計(インフレ適用後)
-  pension: number // その年の年金収入
-  net: number // expense - pension
+  income: number // その年の勤労収入(リタイア前のみ・インフレ適用後)
+  pension: number // その年の年金収入(リタイア後のみ)
+  net: number // expense - pension（働くのをやめた場合に資産で賄う額）
 }
 
 /** 資産推移の1行 */
@@ -102,6 +112,15 @@ export function livingCostDefault(hasSpouse: boolean, childrenCount: number): nu
 }
 
 /**
+ * 世帯収入(手取り月額)の既定値。1人は単身勤労者世帯、2人以上は二人以上の
+ * 勤労者世帯の可処分所得(家計調査2024)を使う。
+ */
+export function incomeDefault(hasSpouse: boolean, childrenCount: number): number {
+  const size = householdSize(hasSpouse, childrenCount)
+  return size <= 1 ? HOUSEHOLD_INCOME_MONTHLY.single : HOUSEHOLD_INCOME_MONTHLY.multiWorker
+}
+
+/**
  * 未入力項目を政府公式データ(officialData.js)で補完した入力を作る。
  * 部分入力(Partial)を受け取り、完全な LifeplanInput を返す。
  */
@@ -109,7 +128,8 @@ export function applyDefaults(partial: Partial<LifeplanInput>): LifeplanInput {
   // 子どもの人数は仕様上0〜4。範囲外の値は防御的にクランプする
   const childrenCount = Math.max(0, Math.min(partial.childrenCount ?? 0, 4))
   const hasSpouse = partial.hasSpouse ?? true
-  const livingDefault = livingCostDefault(hasSpouse, childrenCount)
+  const expenseDefault = livingCostDefault(hasSpouse, childrenCount)
+  const monthlyIncomeDefault = incomeDefault(hasSpouse, childrenCount)
   // 年金の既定値: 独身は本人分のみ、配偶者ありは本人分+配偶者の基礎年金満額。
   // 配偶者あり時の合計は公式のモデル年金(夫婦2人)と一致する。
   // ※App.jsxは自前でpensionMonthlyを確定して渡すため、この既定値は
@@ -120,7 +140,9 @@ export function applyDefaults(partial: Partial<LifeplanInput>): LifeplanInput {
   return {
     currentAge: partial.currentAge ?? 30,
     lifespan: partial.lifespan ?? 100, // 既定100歳(3章)
-    monthlyLivingCost: partial.monthlyLivingCost ?? livingDefault,
+    monthlyExpense: partial.monthlyExpense ?? expenseDefault,
+    monthlyIncome: partial.monthlyIncome ?? monthlyIncomeDefault,
+    startingAssets: partial.startingAssets ?? 0, // 現在の金融資産(未入力は0)
     hasSpouse,
     childrenCount,
     educationPolicy: partial.educationPolicy ?? 'public',
@@ -155,8 +177,9 @@ export function educationCostAtChildAge(
 }
 
 /**
- * 現在年齢から寿命の前年まで、1年ごとの収支(支出・年金・差引)を作る。
- * - 支出 = (生活費12か月 + 教育費 + 自由記入イベント) にインフレ適用
+ * 現在年齢から寿命の前年まで、1年ごとの収支(支出・収入・年金・差引)を作る。
+ * - 支出 = (世帯支出12か月 + 教育費 + 自由記入イベント) にインフレ適用
+ * - 収入 = リタイア前のみ、世帯収入12か月分にインフレ適用
  * - 年金 = リタイア年齢以降、毎年12か月分(名目のまま)
  */
 export function buildYearlySchedule(input: LifeplanInput): YearRow[] {
@@ -164,14 +187,18 @@ export function buildYearlySchedule(input: LifeplanInput): YearRow[] {
   for (let age = input.currentAge; age < input.lifespan; age++) {
     const k = age - input.currentAge // 経過年数(インフレ用)
     const childAge = k // 仮定1: 子どもは現在0歳
-    let base = input.monthlyLivingCost * 12
+    let base = input.monthlyExpense * 12
     base += input.childrenCount * educationCostAtChildAge(childAge, input.educationPolicy)
     for (const ev of input.extraEvents) {
       if (ev.age === age) base += ev.amount
     }
-    const expense = inflate(base, input.inflationRatePercent, k)
+    const expense = Math.round(inflate(base, input.inflationRatePercent, k))
+    const income =
+      age < input.retireAge
+        ? Math.round(inflate(input.monthlyIncome * 12, input.inflationRatePercent, k))
+        : 0
     const pension = age >= input.retireAge ? input.pensionMonthly * 12 : 0
-    rows.push({ age, expense: Math.round(expense), pension, net: Math.round(expense) - pension })
+    rows.push({ age, expense, income, pension, net: expense - pension })
   }
   return rows
 }
@@ -218,9 +245,10 @@ export function requiredRemainingLine(
 }
 
 /**
- * 資産曲線のシミュレーション(年次)。
- * 毎年: 運用益(年率r) → リタイア前なら積立(月額×12) → リタイア後なら
- * その年の net(支出−年金) を取り崩し。
+ * 「必要な最低積立額」判定用の資産シミュレーション(年次)。
+ * リタイア前の生活費は勤労収入で賄われる前提で、資産には毎年一定額
+ * (monthlyContribution×12)だけ積み立てる。リタイア後は net(支出−年金)を取り崩す。
+ * 開始残高は現在の金融資産(startingAssets)。
  */
 export function simulateAssets(
   input: LifeplanInput,
@@ -229,15 +257,13 @@ export function simulateAssets(
   annualRatePercent: number,
 ): AssetSimResult {
   const r = annualRatePercent / 100
-  let assets = 0
+  let assets = input.startingAssets
   let totalContributed = 0
   let totalInterest = 0
   let depleted = false
   const rows: AssetRow[] = []
-  // 起点(現在年齢・資産0円)。年金余剰などで「今すでに自由」なケースの
-  // クロスオーバー判定を1年遅らせないために含める
   if (schedule.length > 0) {
-    rows.push({ age: schedule[0].age, assets: 0 })
+    rows.push({ age: schedule[0].age, assets: Math.round(assets) })
   }
   for (const row of schedule) {
     const interest = assets * r
@@ -251,6 +277,40 @@ export function simulateAssets(
     }
     if (assets < 0) depleted = true
     rows.push({ age: row.age + 1, assets: Math.round(assets) }) // 年末時点
+  }
+  return { rows, totalContributed, totalInterest: Math.round(totalInterest), depleted }
+}
+
+/**
+ * 実際の資産推移シミュレーション(年次)。グラフに表示する曲線。
+ * 開始残高は現在の金融資産。毎年、運用益を付けたあとに実際の収支を反映する:
+ *   リタイア前 = 世帯収入 − 世帯支出 (貯蓄。負なら取り崩し)
+ *   リタイア後 = 年金 − 世帯支出   (通常は取り崩し)
+ * totalContributed には貯蓄(プラスの収支)の累計を入れる。
+ */
+export function simulateActual(
+  input: LifeplanInput,
+  schedule: YearRow[],
+  annualRatePercent: number,
+): AssetSimResult {
+  const r = annualRatePercent / 100
+  let assets = input.startingAssets
+  let totalContributed = 0
+  let totalInterest = 0
+  let depleted = false
+  const rows: AssetRow[] = []
+  if (schedule.length > 0) {
+    rows.push({ age: schedule[0].age, assets: Math.round(assets) })
+  }
+  for (const row of schedule) {
+    const interest = assets * r
+    totalInterest += interest
+    assets += interest
+    const flow = row.income + row.pension - row.expense
+    if (flow > 0) totalContributed += flow
+    assets += flow
+    if (assets < 0) depleted = true
+    rows.push({ age: row.age + 1, assets: Math.round(assets) })
   }
   return { rows, totalContributed, totalInterest: Math.round(totalInterest), depleted }
 }
@@ -293,12 +353,13 @@ export function findCrossoverAge(
   return null
 }
 
-/** ⑸ サマリーカード3枚分の計算結果 */
+/** ⑸ サマリーカード分の計算結果 */
 export interface LifeplanSummary {
   lifetimeRequired: number // ①生涯必要額
-  monthlyContribution: number | null // ②必要な毎月積立額
-  investmentGain: number // ③運用で増えた分(標準シナリオ・寿命時点)
-  crossoverAge: number | null // 安心ラインに到達する年齢
+  requiredMonthlyContribution: number | null // 必要な最低積立額(月)
+  actualMonthlySaving: number // あなたの毎月の貯蓄額(世帯収入−世帯支出)
+  investmentGain: number // ③運用で増えた分(実際の推移・標準シナリオ)
+  crossoverAge: number | null // 安心ライン(FI)に到達する年齢
 }
 
 /** 入力(部分可)から、サマリーカードに必要な数値一式を計算する */
@@ -306,16 +367,19 @@ export function computeSummary(partial: Partial<LifeplanInput>): LifeplanSummary
   const input = applyDefaults(partial)
   const schedule = buildYearlySchedule(input)
   const required = lifetimeRequired(schedule)
-  const monthly = findRequiredMonthlyContribution(input, schedule, SCENARIO_RATES.standard)
-  const sim = simulateAssets(input, schedule, monthly ?? 0, SCENARIO_RATES.standard)
+  // 必要な最低積立額(参考): リタイア前に毎月いくら積み立てれば枯渇しないか
+  const minMonthly = findRequiredMonthlyContribution(input, schedule, SCENARIO_RATES.standard)
+  // 実際の推移: 世帯収入−世帯支出を貯蓄として積み上げ、クロスオーバーと運用益を出す
+  const actual = simulateActual(input, schedule, SCENARIO_RATES.standard)
   const crossover = findCrossoverAge(
-    sim.rows,
+    actual.rows,
     requiredRemainingLine(schedule, SCENARIO_RATES.standard),
   )
   return {
     lifetimeRequired: required,
-    monthlyContribution: monthly,
-    investmentGain: sim.totalInterest,
+    requiredMonthlyContribution: minMonthly,
+    actualMonthlySaving: input.monthlyIncome - input.monthlyExpense,
+    investmentGain: actual.totalInterest,
     crossoverAge: crossover,
   }
 }
