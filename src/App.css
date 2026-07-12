@@ -32,6 +32,14 @@ h1 {
   margin: 0 auto;
 }
 
+.app-lead {
+  max-width: 560px;
+  margin: 0 auto 16px;
+  font-size: 14px;
+  line-height: 1.9;
+  color: #d9d2bd;
+}
+
 .panel {
   background: var(--cream);
   border: 1px solid var(--gold);
@@ -39,6 +47,26 @@ h1 {
   padding: 32px;
   margin-bottom: 28px;
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
+}
+
+.step-label {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: var(--gold);
+  border: 1px solid var(--gold);
+  border-radius: 2px;
+  padding: 3px 10px;
+  margin: 0 0 12px;
+  text-transform: uppercase;
+}
+
+.panel-note {
+  font-size: 13px;
+  line-height: 1.8;
+  color: #6d6450;
+  margin: 0 0 20px;
 }
 
 .panel-title {
@@ -83,6 +111,162 @@ h1 {
   outline: none;
   border-color: var(--gold);
   box-shadow: 0 0 0 3px rgba(201, 161, 74, 0.15);
+}
+
+.field-hint {
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.7;
+  color: #8a7d56;
+}
+
+.extra-events {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid #e2d6b8;
+}
+
+.extra-events-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: #5c5440;
+  margin: 0 0 12px;
+}
+
+.extra-event-row {
+  display: grid;
+  grid-template-columns: 1.4fr 1.2fr 0.8fr auto;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.extra-event-row input {
+  padding: 8px 10px;
+  font-size: 14px;
+  border-radius: 2px;
+  border: 1px solid #d8cba0;
+  background: #fff;
+  font-family: 'Noto Sans JP', sans-serif;
+  min-width: 0;
+}
+
+.row-remove {
+  border: 1px solid #d8cba0;
+  background: #fff;
+  color: #8a7d56;
+  border-radius: 2px;
+  width: 34px;
+  cursor: pointer;
+  font-size: 16px;
+}
+
+.row-remove:hover {
+  border-color: var(--gold);
+  color: var(--navy);
+}
+
+.row-add {
+  margin-top: 4px;
+  padding: 8px 16px;
+  border: 1px dashed var(--gold);
+  background: transparent;
+  color: #8a7d56;
+  border-radius: 2px;
+  cursor: pointer;
+  font-size: 13px;
+  font-family: 'Noto Sans JP', sans-serif;
+}
+
+.row-add:hover {
+  background: #fdf9ee;
+  color: var(--navy);
+}
+
+.summary-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.summary-card {
+  background: #fff;
+  border: 1px solid #e2d6b8;
+  border-radius: 4px;
+  padding: 20px 16px;
+  text-align: center;
+}
+
+.summary-card-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #8a7d56;
+  margin: 0 0 8px;
+  letter-spacing: 0.5px;
+}
+
+.summary-card-value {
+  font-family: 'Noto Serif JP', serif;
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--navy);
+  margin: 0 0 8px;
+  line-height: 1.2;
+}
+
+.summary-card-sub {
+  font-size: 11px;
+  line-height: 1.6;
+  color: #8a7d56;
+  margin: 0;
+}
+
+.crossover-banner {
+  background: linear-gradient(135deg, #fdf9ee, #faf3dd);
+  border: 2px solid var(--gold);
+  border-radius: 4px;
+  padding: 24px;
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.crossover-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: #8a7d56;
+  letter-spacing: 1px;
+  margin: 0 0 8px;
+}
+
+.crossover-value {
+  font-family: 'Noto Serif JP', serif;
+  font-size: 36px;
+  font-weight: 700;
+  color: var(--navy);
+  margin: 0 0 8px;
+  line-height: 1.2;
+}
+
+.crossover-sub {
+  font-size: 12px;
+  line-height: 1.7;
+  color: #6d6450;
+  margin: 0;
+}
+
+.guide {
+  text-align: center;
+  color: #8a7d56;
+  font-size: 14px;
+  padding: 24px 0;
+  margin: 0;
+}
+
+.chart-note {
+  font-size: 11px;
+  line-height: 1.7;
+  color: #8a7d56;
+  margin: 12px 0 0;
 }
 
 .product-picker-label {
@@ -165,8 +349,29 @@ h1 {
 
 @media (max-width: 600px) {
   .form,
-  .product-list {
+  .product-list,
+  .summary-cards {
     grid-template-columns: 1fr;
+  }
+
+  .app-container {
+    padding: 32px 14px 56px;
+  }
+
+  .panel {
+    padding: 20px 16px;
+  }
+
+  .extra-event-row {
+    grid-template-columns: 1fr 1fr 64px auto;
+  }
+
+  .summary-card-value {
+    font-size: 24px;
+  }
+
+  .crossover-value {
+    font-size: 28px;
   }
 }
 
@@ -214,4 +419,10 @@ h1 {
 
 .disclaimer p:last-child {
   margin-bottom: 0;
+}
+
+@media (max-width: 600px) {
+  .chart-wrapper {
+    padding: 16px 8px;
+  }
 }
