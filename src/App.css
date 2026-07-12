@@ -54,7 +54,10 @@ h1 {
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 2px;
-  color: var(--gold);
+  /* クリーム背景上でゴールド文字はコントラスト不足(約2.3:1)のため、
+     ヘッダーと同じ「ネイビー地にゴールド」パターンで視認性を確保する */
+  color: var(--gold-soft);
+  background: var(--navy);
   border: 1px solid var(--gold);
   border-radius: 2px;
   padding: 3px 10px;
@@ -83,6 +86,8 @@ h1 {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 24px;
+  /* ラベル文の行数差で高さが揃わないのは意図した非対称 */
+  align-items: start;
 }
 
 .form label {
@@ -117,7 +122,7 @@ h1 {
   font-size: 11px;
   font-weight: 400;
   line-height: 1.7;
-  color: #8a7d56;
+  color: #6d6450;
 }
 
 .extra-events {
@@ -153,7 +158,7 @@ h1 {
 .row-remove {
   border: 1px solid #d8cba0;
   background: #fff;
-  color: #8a7d56;
+  color: #6d6450;
   border-radius: 2px;
   width: 34px;
   cursor: pointer;
@@ -170,7 +175,7 @@ h1 {
   padding: 8px 16px;
   border: 1px dashed var(--gold);
   background: transparent;
-  color: #8a7d56;
+  color: #6d6450;
   border-radius: 2px;
   cursor: pointer;
   font-size: 13px;
@@ -200,7 +205,7 @@ h1 {
 .summary-card-label {
   font-size: 12px;
   font-weight: 500;
-  color: #8a7d56;
+  color: #6d6450;
   margin: 0 0 8px;
   letter-spacing: 0.5px;
 }
@@ -217,7 +222,7 @@ h1 {
 .summary-card-sub {
   font-size: 11px;
   line-height: 1.6;
-  color: #8a7d56;
+  color: #6d6450;
   margin: 0;
 }
 
@@ -233,7 +238,7 @@ h1 {
 .crossover-label {
   font-size: 13px;
   font-weight: 700;
-  color: #8a7d56;
+  color: #6d6450;
   letter-spacing: 1px;
   margin: 0 0 8px;
 }
@@ -256,7 +261,7 @@ h1 {
 
 .guide {
   text-align: center;
-  color: #8a7d56;
+  color: #6d6450;
   font-size: 14px;
   padding: 24px 0;
   margin: 0;
@@ -265,7 +270,7 @@ h1 {
 .chart-note {
   font-size: 11px;
   line-height: 1.7;
-  color: #8a7d56;
+  color: #6d6450;
   margin: 12px 0 0;
 }
 
@@ -333,7 +338,7 @@ h1 {
 .allocation-note {
   margin: 0 0 0 26px;
   font-size: 12px;
-  color: #a6772f;
+  color: #8f5f1f;
 }
 
 .total-principal {
@@ -347,34 +352,6 @@ h1 {
   letter-spacing: 0.4px;
 }
 
-@media (max-width: 600px) {
-  .form,
-  .product-list,
-  .summary-cards {
-    grid-template-columns: 1fr;
-  }
-
-  .app-container {
-    padding: 32px 14px 56px;
-  }
-
-  .panel {
-    padding: 20px 16px;
-  }
-
-  .extra-event-row {
-    grid-template-columns: 1fr 1fr 64px auto;
-  }
-
-  .summary-card-value {
-    font-size: 24px;
-  }
-
-  .crossover-value {
-    font-size: 28px;
-  }
-}
-
 .chart-wrapper {
   background: var(--cream);
   border: 1px solid var(--gold);
@@ -383,12 +360,14 @@ h1 {
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
 }
 
+/* クリーム背景のパネル内に表示するため、ダーク文字×薄い赤背景で可視性を確保
+   (旧v1のネイビー背景用配色では文字がほぼ見えなかった) */
 .error {
-  color: #f1ecde;
+  color: #7a2a1f;
   font-weight: 500;
   text-align: center;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(241, 236, 222, 0.3);
+  background: #fdecec;
+  border: 1px solid #e0a89f;
   border-radius: 4px;
   padding: 20px;
 }
@@ -421,7 +400,40 @@ h1 {
   margin-bottom: 0;
 }
 
+/* ── モバイル(〜600px): 全base定義より後に置き、確実に上書きする ── */
 @media (max-width: 600px) {
+  .form,
+  .product-list,
+  .summary-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .app-container {
+    padding: 32px 14px 56px;
+  }
+
+  .panel {
+    padding: 20px 16px;
+  }
+
+  /* 375pxでは1行4カラムだと入力欄が狭すぎるため、
+     項目名を全幅の1行目に、金額・年齢・削除を2行目に折り返す */
+  .extra-event-row {
+    grid-template-columns: 1.2fr 0.8fr auto;
+  }
+
+  .extra-event-row input:first-child {
+    grid-column: 1 / -1;
+  }
+
+  .summary-card-value {
+    font-size: 24px;
+  }
+
+  .crossover-value {
+    font-size: 28px;
+  }
+
   .chart-wrapper {
     padding: 16px 8px;
   }

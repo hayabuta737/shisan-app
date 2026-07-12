@@ -51,7 +51,8 @@ const PRODUCTS = [
 ]
 
 const MAX_PRODUCTS = 5
-// 1商品あたりの配分額の上限(100億円)。極端な入力を防ぐためのガード
+// 金額入力の共通上限(100億円)。商品配分・生活費・年金・自由記入イベントの
+// すべてに適用し、極端な入力による表示破綻を防ぐ
 const MAX_ALLOCATION = 10_000_000_000
 // 年齢入力の上限
 const MAX_AGE = 120
@@ -67,8 +68,19 @@ const formatCompactYen = (value) => {
 
 const formatYen = (value) => `${Math.round(value).toLocaleString()}円`
 
-// 数字文字列 → number | undefined(空)。全角対策はinputMode/numericに任せる
+// 数字文字列 → number | undefined(空)
 const parseNum = (s) => (s === '' ? undefined : Number(s))
+
+// 金額入力の共通処理: 全角数字を半角へ変換 → 数字以外を除去 → 上限クランプ。
+// (inputMode="numeric"はキーボードのヒントに過ぎず全角変換はしないため、
+//  IMEで全角入力された値がサイレントに消えるのを防ぐ)
+const sanitizeAmount = (raw) => {
+  const digits = raw
+    .replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0))
+    .replace(/[^0-9]/g, '')
+  if (digits === '') return ''
+  return String(Math.min(Number(digits), MAX_ALLOCATION))
+}
 
 function App() {
   // ── ステップ1: 必要額フォームの状態(文字列で保持し、空=未入力=政府データ補完) ──
@@ -135,6 +147,17 @@ function App() {
     if (retireAge !== undefined) {
       if (!Number.isInteger(retireAge) || retireAge < currentAge || retireAge > lifespan)
         return `リタイア年齢は現在の年齢〜${lifespan}の整数で入力してください。`
+    }
+    // 自由記入イベント: 何か入力済みの行は年齢・金額の両方を要求し、
+    // 範囲外の年齢が「黙って計算から無視される」ことを防ぐ
+    for (const ev of extraEvents) {
+      const touched = ev.label !== '' || ev.amount !== '' || ev.age !== ''
+      if (!touched) continue
+      const evAge = parseNum(ev.age)
+      if (evAge === undefined || ev.amount === '')
+        return '「その他の予定」には金額と年齢の両方を入力してください（不要な行は×で削除できます）。'
+      if (!Number.isInteger(evAge) || evAge < currentAge || evAge >= lifespan)
+        return `「その他の予定」の年齢は現在の年齢〜${lifespan - 1}の整数で入力してください。`
     }
     return null
   })()
@@ -227,10 +250,7 @@ function App() {
               inputMode="numeric"
               value={livingCostStr === '' ? '' : Number(livingCostStr).toLocaleString()}
               placeholder={`未入力: ${livingCostDefault.toLocaleString()}円`}
-              onChange={(e) => {
-                const digits = e.target.value.replace(/[^0-9]/g, '')
-                setLivingCostStr(digits)
-              }}
+              onChange={(e) => setLivingCostStr(sanitizeAmount(e.target.value))}
             />
             <span className="field-hint">
               補完値は総務省・家計調査(2024年)の{householdSize}人世帯平均です
@@ -286,10 +306,7 @@ function App() {
               inputMode="numeric"
               value={pensionStr === '' ? '' : Number(pensionStr).toLocaleString()}
               placeholder={`未入力: ${PENSION_MONTHLY.modelCouple.toLocaleString()}円`}
-              onChange={(e) => {
-                const digits = e.target.value.replace(/[^0-9]/g, '')
-                setPensionStr(digits)
-              }}
+              onChange={(e) => setPensionStr(sanitizeAmount(e.target.value))}
             />
             <span className="field-hint">
               毎年誕生月に届く「ねんきん定期便」の「老齢年金の見込額」欄で確認できます。補完値は夫婦2人のモデル年金（厚労省・令和8年度）です
@@ -300,7 +317,7 @@ function App() {
         <div className="extra-events">
           <p className="extra-events-title">その他の予定（住宅の頭金・車の買い替えなど）</p>
           {extraEvents.map((ev, idx) => (
-            <div key={idx} className="extra-event-row">
+            <div key={ev.id} className="extra-event-row">
               <input
                 type="text"
                 placeholder="項目名（例: 車）"
@@ -312,9 +329,7 @@ function App() {
                 inputMode="numeric"
                 placeholder="金額（円）"
                 value={ev.amount === '' ? '' : Number(ev.amount).toLocaleString()}
-                onChange={(e) =>
-                  updateExtraEvent(idx, 'amount', e.target.value.replace(/[^0-9]/g, ''))
-                }
+                onChange={(e) => updateExtraEvent(idx, 'amount', sanitizeAmount(e.target.value))}
               />
               <input
                 type="number"
@@ -337,7 +352,13 @@ function App() {
           <button
             type="button"
             className="row-add"
-            onClick={() => setExtraEvents((prev) => [...prev, { label: '', amount: '', age: '' }])}
+            onClick={() =>
+              setExtraEvents((prev) => [
+                ...prev,
+                // keyにindexを使うと行削除時にフォーカスが隣の行へ飛ぶため安定IDを持たせる
+                { id: crypto.randomUUID(), label: '', amount: '', age: '' },
+              ])
+            }
           >
             ＋ 予定を追加
           </button>
@@ -375,7 +396,7 @@ function App() {
                       placeholder="毎月の配分イメージ（円）"
                       value={allocations[p.name] ? allocations[p.name].toLocaleString() : ''}
                       onChange={(e) => {
-                        const digits = e.target.value.replace(/[^0-9]/g, '')
+                        const digits = sanitizeAmount(e.target.value)
                         setAllocation(p.name, digits === '' ? 0 : Number(digits))
                       }}
                     />
@@ -452,8 +473,19 @@ function App() {
               <ResponsiveContainer width="100%" height={380}>
                 <LineChart data={result.chart} margin={{ top: 16, right: 16, left: 4, bottom: 8 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e2d6b8" />
-                  <XAxis dataKey="age" stroke="#8a7d56" tickFormatter={(v) => `${v}歳`} />
-                  <YAxis width={72} stroke="#8a7d56" tickFormatter={(v) => formatCompactYen(v)} />
+                  <XAxis
+                    dataKey="age"
+                    stroke="#8a7d56"
+                    tick={{ fontSize: 11 }}
+                    interval="preserveStartEnd"
+                    tickFormatter={(v) => `${v}歳`}
+                  />
+                  <YAxis
+                    width={72}
+                    stroke="#8a7d56"
+                    tick={{ fontSize: 11 }}
+                    tickFormatter={(v) => formatCompactYen(v)}
+                  />
                   <Tooltip
                     formatter={(value) => formatYen(value)}
                     labelFormatter={(label) => `${label}歳`}
