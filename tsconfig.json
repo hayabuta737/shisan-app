@@ -8,7 +8,9 @@
     "moduleResolution": "bundler",
     "strict": true,
     "noEmit": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    // officialData.js(v2要件でjs指定のデータ定数)をTSから import するため
+    "allowJs": true
   },
-  "include": ["src/lib/**/*.ts"]
+  "include": ["src/lib/**/*.ts", "src/data/**/*.js"]
 }
