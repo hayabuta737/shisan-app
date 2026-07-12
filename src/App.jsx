@@ -17,9 +17,11 @@ import {
   simulateAssets,
   findRequiredMonthlyContribution,
   findCrossoverAge,
+  householdSize as calcHouseholdSize,
+  livingCostDefault as calcLivingCostDefault,
   SCENARIO_RATES,
 } from './lib/lifeplan'
-import { LIVING_COST_MONTHLY, LIFE_EXPECTANCY, PENSION_MONTHLY } from './data/officialData'
+import { LIFE_EXPECTANCY, PENSION_MONTHLY } from './data/officialData'
 import './App.css'
 
 // 各商品の想定年率(rate, 単位%)。
@@ -44,10 +46,6 @@ const PRODUCTS = [
   { name: 'eMAXIS SLIM 全世界株式（オルカン）', rate: 6.0 },
   // S&P500の長期年率リターン(実質ベース)の一般的水準。名目より保守的に設定
   { name: 'S&P500', rate: 7.0 },
-  // 暗号資産は極めて高ボラティリティで、将来の再現性がない。
-  // 過去の長期実績は年率数十%超だが、それをそのまま将来に当てはめるのは危険なため、
-  // 大幅に保守化した想定値とする(あくまで参考。投資判断は自己責任)。
-  { name: 'ビットコイン', rate: 15.0 },
 ]
 
 const MAX_PRODUCTS = 5
@@ -87,10 +85,13 @@ function App() {
   const [ageStr, setAgeStr] = useState('')
   const [livingCostStr, setLivingCostStr] = useState('')
   const [lifespan, setLifespan] = useState(100)
+  const [hasSpouse, setHasSpouse] = useState(true)
   const [childrenCount, setChildrenCount] = useState(0)
   const [educationPolicy, setEducationPolicy] = useState('public')
   const [retireAgeStr, setRetireAgeStr] = useState('')
-  const [pensionStr, setPensionStr] = useState('')
+  // 年金は「自分」と「配偶者」に分けて入力(独身時は配偶者分を計算に含めない)
+  const [pensionSelfStr, setPensionSelfStr] = useState('')
+  const [pensionSpouseStr, setPensionSpouseStr] = useState('')
   const [extraEvents, setExtraEvents] = useState([])
 
   // ── ステップ2: 商品選択(旧v1を吸収) ──
@@ -162,6 +163,14 @@ function App() {
     return null
   })()
 
+  // 年金の合計月額(必要総額に反映)。未入力の欄は世帯構成に応じた既定値で補完。
+  // 独身時は配偶者分を一切含めない。
+  const pensionSelf = parseNum(pensionSelfStr) ?? PENSION_MONTHLY.selfModel
+  const pensionSpouse = hasSpouse
+    ? (parseNum(pensionSpouseStr) ?? PENSION_MONTHLY.spouseBasic)
+    : 0
+  const pensionMonthly = pensionSelf + pensionSpouse
+
   // ── 計算(ステップ3) ──
   const result = useMemo(() => {
     if (currentAge === undefined || validationError) return null
@@ -169,10 +178,11 @@ function App() {
       currentAge,
       lifespan,
       monthlyLivingCost: parseNum(livingCostStr),
+      hasSpouse,
       childrenCount,
       educationPolicy,
       retireAge,
-      pensionMonthly: parseNum(pensionStr),
+      pensionMonthly,
       extraEvents: extraEvents
         .filter((ev) => ev.amount !== '' && ev.age !== '')
         .map((ev) => ({ label: ev.label, amount: Number(ev.amount), age: Number(ev.age) })),
@@ -197,11 +207,12 @@ function App() {
       required: lineByAge.get(row.age),
     }))
     return { input, required, monthly, crossoverAge, chart, gain: sims.standard.totalInterest }
-  }, [currentAge, validationError, lifespan, livingCostStr, childrenCount, educationPolicy, retireAge, pensionStr, extraEvents, standardRate, pessimisticRate, optimisticRate])
+  }, [currentAge, validationError, lifespan, livingCostStr, hasSpouse, childrenCount, educationPolicy, retireAge, pensionMonthly, extraEvents, standardRate, pessimisticRate, optimisticRate])
 
-  // 補完値の案内用: 世帯人数(夫婦2人+子ども)に応じた家計調査平均
-  const householdSize = Math.min(2 + childrenCount, 6)
-  const livingCostDefault = LIVING_COST_MONTHLY.byMembers[householdSize]
+  // 補完値の案内用。計算(lifeplan.applyDefaults)と同じ関数を使い、表示と計算の
+  // 世帯人数ロジックを一元化する
+  const householdSize = calcHouseholdSize(hasSpouse, childrenCount)
+  const livingCostDefault = calcLivingCostDefault(hasSpouse, childrenCount)
 
   const crossoverYear =
     result && result.crossoverAge !== null
@@ -258,6 +269,20 @@ function App() {
           </label>
 
           <label>
+            配偶者の有無
+            <select
+              value={hasSpouse ? 'yes' : 'no'}
+              onChange={(e) => setHasSpouse(e.target.value === 'yes')}
+            >
+              <option value="yes">配偶者あり（二人暮らし）</option>
+              <option value="no">独身（一人暮らし）</option>
+            </select>
+            <span className="field-hint">
+              生活費の世帯人数と、年金（配偶者分を含めるか）の計算に反映されます
+            </span>
+          </label>
+
+          <label>
             寿命想定
             <select value={lifespan} onChange={(e) => setLifespan(Number(e.target.value))}>
               <option value={90}>90歳</option>
@@ -278,14 +303,17 @@ function App() {
             </select>
           </label>
 
-          <label>
-            教育方針
-            <select value={educationPolicy} onChange={(e) => setEducationPolicy(e.target.value)}>
-              <option value="public">公立中心（大学は国立）</option>
-              <option value="private">私立中心（大学は私立）</option>
-            </select>
-            <span className="field-hint">教育費は文科省・令和5年度子供の学習費調査等で計算します</span>
-          </label>
+          {/* 教育方針は子どもが1人以上のときのみ表示（0人なら教育費は発生しない） */}
+          {childrenCount >= 1 && (
+            <label>
+              教育方針
+              <select value={educationPolicy} onChange={(e) => setEducationPolicy(e.target.value)}>
+                <option value="public">公立中心（大学は国立）</option>
+                <option value="private">私立中心（大学は私立）</option>
+              </select>
+              <span className="field-hint">教育費は文科省・令和5年度子供の学習費調査等で計算します</span>
+            </label>
+          )}
 
           <label>
             リタイア年齢
@@ -300,18 +328,35 @@ function App() {
           </label>
 
           <label>
-            年金の見込み月額
+            {hasSpouse ? 'あなたの年金の見込み月額' : '年金の見込み月額'}
             <input
               type="text"
               inputMode="numeric"
-              value={pensionStr === '' ? '' : Number(pensionStr).toLocaleString()}
-              placeholder={`未入力: ${PENSION_MONTHLY.modelCouple.toLocaleString()}円`}
-              onChange={(e) => setPensionStr(sanitizeAmount(e.target.value))}
+              value={pensionSelfStr === '' ? '' : Number(pensionSelfStr).toLocaleString()}
+              placeholder={`未入力: ${PENSION_MONTHLY.selfModel.toLocaleString()}円`}
+              onChange={(e) => setPensionSelfStr(sanitizeAmount(e.target.value))}
             />
             <span className="field-hint">
-              毎年誕生月に届く「ねんきん定期便」の「老齢年金の見込額」欄で確認できます。補完値は夫婦2人のモデル年金（厚労省・令和8年度）です
+              毎年誕生月に届く「ねんきん定期便」の「老齢年金の見込額」欄で確認できます。補完値は会社員本人のモデル年金（厚労省・令和8年度）です
             </span>
           </label>
+
+          {/* 配偶者ありのときだけ配偶者分の年金を入力（必要総額に合算される） */}
+          {hasSpouse && (
+            <label>
+              配偶者の年金の見込み月額
+              <input
+                type="text"
+                inputMode="numeric"
+                value={pensionSpouseStr === '' ? '' : Number(pensionSpouseStr).toLocaleString()}
+                placeholder={`未入力: ${PENSION_MONTHLY.spouseBasic.toLocaleString()}円`}
+                onChange={(e) => setPensionSpouseStr(sanitizeAmount(e.target.value))}
+              />
+              <span className="field-hint">
+                補完値は配偶者の老齢基礎年金・満額（厚労省・令和8年度）です。共働き等はねんきん定期便の額を入力してください
+              </span>
+            </label>
+          )}
         </div>
 
         <div className="extra-events">
@@ -511,7 +556,7 @@ function App() {
           本シミュレーションで使用する年利は、各商品の過去の実績等を参考にした想定値（近似値）であり、将来の運用成果を保証するものではありません。実際の利回りは市場環境により変動します。
         </p>
         <p>
-          生活費・教育費・年金などの補完値は政府統計（総務省家計調査、文科省子供の学習費調査、厚労省年金額改定等）に基づく平均値です。計算にはインフレ率年2%の仮定を含みます。子どもは現在0歳・世帯は夫婦2人+子ども・保有資産0円からの積立開始と仮定しています。
+          生活費・教育費・年金などの補完値は政府統計（総務省家計調査、文科省子供の学習費調査、厚労省年金額改定等）に基づく平均値です。計算にはインフレ率年2%の仮定を含みます。世帯人数と年金は入力（配偶者の有無・子どもの人数）に応じて計算します。子どもは現在0歳・保有資産0円からの積立開始と仮定しています。
         </p>
         <p>
           また、本アプリは特定の商品を推奨するものでは決してありません。資産運用・投資の判断は、必ずお客様ご自身の責任において実施してください。

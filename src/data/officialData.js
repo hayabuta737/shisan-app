@@ -122,10 +122,23 @@ export const UNIVERSITY_COST = {
  *   ※夫が平均的収入(平均標準報酬・賞与含む月額換算45.5万円)で40年間就業し、
  *     妻がその期間すべて専業主婦だった世帯の新規裁定水準
  * - 老齢基礎年金 満額(昭和31年4月2日以後生まれ・新規裁定): 月70,608円
+ *
+ * selfModel / spouseBasic は新規の統計値ではなく、上記モデル年金の「内訳」への分解:
+ *   本人の年金総額(老齢厚生年金 + 本人の老齢基礎年金)
+ *     = モデル年金 − 配偶者の基礎年金満額 = 237,279 − 70,608 = 166,671円/月
+ * これにより「独身=selfModelのみ」「配偶者あり=selfModel+spouseBasic(=modelCouple)」
+ * と、世帯構成に応じた年金の既定値を公式値と整合させて算出できる。
+ *
+ * 派生値は公式値(MODEL_COUPLE / BASIC_FULL)から演算で定義し、翌年度に公式値だけ
+ * 更新して派生値の書き換えを忘れる「設計ドリフト」を防ぐ。
  */
+const MODEL_COUPLE = 237279 // モデル年金(夫婦2人世帯)
+const BASIC_FULL = 70608 // 老齢基礎年金 満額(1人分)
 export const PENSION_MONTHLY = {
-  modelCouple: 237279, // モデル年金(夫婦2人世帯)
-  basicFull: 70608, // 老齢基礎年金 満額(1人分)
+  modelCouple: MODEL_COUPLE,
+  basicFull: BASIC_FULL,
+  selfModel: MODEL_COUPLE - BASIC_FULL, // 本人の年金総額(独身の既定値) = 166,671
+  spouseBasic: BASIC_FULL, // 配偶者(専業主婦等)の老齢基礎年金 満額
 }
 
 /**

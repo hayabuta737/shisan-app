@@ -6,8 +6,9 @@
 //    教育費は子どもが3〜21歳(幼稚園〜大学)の間、親の年齢に換算して計上する。
 //    複数人の場合も全員同年齢(双子等)と仮定するため、実際とは教育費の
 //    ピーク時期がずれる点に注意。
-// 2. 世帯人数は「夫婦2人 + 子どもの人数」と仮定する(年金デフォルトが
-//    夫婦2人のモデル年金であることと整合させる)。
+// 2. 世帯人数は「本人(+配偶者) + 子どもの人数」で算出する。
+//    hasSpouse=true なら本人+配偶者の2人、false なら本人1人を基数とし、
+//    生活費(家計調査)と年金の既定値を世帯構成に合わせて補完する。
 // 3. リタイア前の生活費・教育費は勤労収入で賄われるとみなし、資産からは
 //    支出しない。リタイア後は「支出 − 年金」を資産から取り崩す。
 // 4. 年次モデル: 毎年末に「運用益 → 積立 → 取り崩し」の順で反映する。
@@ -34,6 +35,7 @@ export interface LifeplanInput {
   currentAge: number
   lifespan: number // 寿命想定(90/95/100)
   monthlyLivingCost: number // 基本生活費(月額円)
+  hasSpouse: boolean // 配偶者の有無(世帯人数・年金の既定値に影響)
   childrenCount: number // 0〜4
   educationPolicy: 'public' | 'private' // 公立中心/私立中心
   retireAge: number
@@ -82,23 +84,48 @@ export function inflate(amount: number, ratePercent: number, years: number): num
 }
 
 /**
+ * 世帯人数 = 本人(+配偶者) + 子ども。子どもは仕様上0〜4にクランプ。
+ * (UIの生活費ヒント表示と計算の両方でこの1関数を使い、ロジック重複を避ける)
+ */
+export function householdSize(hasSpouse: boolean, childrenCount: number): number {
+  return (hasSpouse ? 2 : 1) + Math.max(0, Math.min(childrenCount, 4))
+}
+
+/**
+ * 生活費(月額)の既定値。1人は単身世帯、2〜6人は家計調査の世帯人員別平均
+ * (6人以上が上限)を使う。
+ */
+export function livingCostDefault(hasSpouse: boolean, childrenCount: number): number {
+  const size = householdSize(hasSpouse, childrenCount)
+  const byMembers = LIVING_COST_MONTHLY.byMembers as Record<number, number>
+  return size <= 1 ? LIVING_COST_MONTHLY.single : byMembers[Math.min(size, 6)]
+}
+
+/**
  * 未入力項目を政府公式データ(officialData.js)で補完した入力を作る。
  * 部分入力(Partial)を受け取り、完全な LifeplanInput を返す。
  */
 export function applyDefaults(partial: Partial<LifeplanInput>): LifeplanInput {
   // 子どもの人数は仕様上0〜4。範囲外の値は防御的にクランプする
   const childrenCount = Math.max(0, Math.min(partial.childrenCount ?? 0, 4))
-  // 仮定2: 世帯人数 = 夫婦2人 + 子ども(家計調査のbyMembersは6人以上が上限)
-  const householdSize = Math.min(2 + childrenCount, 6)
-  const byMembers = LIVING_COST_MONTHLY.byMembers as Record<number, number>
+  const hasSpouse = partial.hasSpouse ?? true
+  const livingDefault = livingCostDefault(hasSpouse, childrenCount)
+  // 年金の既定値: 独身は本人分のみ、配偶者ありは本人分+配偶者の基礎年金満額。
+  // 配偶者あり時の合計は公式のモデル年金(夫婦2人)と一致する。
+  // ※App.jsxは自前でpensionMonthlyを確定して渡すため、この既定値は
+  //   computeSummary経由(テスト・lib直接呼び出し)でのみ使われる。
+  const pensionDefault = hasSpouse
+    ? PENSION_MONTHLY.selfModel + PENSION_MONTHLY.spouseBasic
+    : PENSION_MONTHLY.selfModel
   return {
     currentAge: partial.currentAge ?? 30,
     lifespan: partial.lifespan ?? 100, // 既定100歳(3章)
-    monthlyLivingCost: partial.monthlyLivingCost ?? byMembers[householdSize],
+    monthlyLivingCost: partial.monthlyLivingCost ?? livingDefault,
+    hasSpouse,
     childrenCount,
     educationPolicy: partial.educationPolicy ?? 'public',
     retireAge: partial.retireAge ?? 65,
-    pensionMonthly: partial.pensionMonthly ?? PENSION_MONTHLY.modelCouple,
+    pensionMonthly: partial.pensionMonthly ?? pensionDefault,
     extraEvents: partial.extraEvents ?? [],
     inflationRatePercent: partial.inflationRatePercent ?? INFLATION_RATE_PERCENT,
   }
