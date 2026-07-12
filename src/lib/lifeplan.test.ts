@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest'
 import {
   inflate,
   applyDefaults,
+  householdSize,
+  livingCostDefault,
   educationCostAtChildAge,
   buildYearlySchedule,
   lifetimeRequired,
@@ -24,6 +26,7 @@ const base: LifeplanInput = {
   currentAge: 60,
   lifespan: 64,
   monthlyLivingCost: 100_000,
+  hasSpouse: true,
   childrenCount: 0,
   educationPolicy: 'public',
   retireAge: 62,
@@ -56,6 +59,41 @@ describe('applyDefaults（政府データによる補完）', () => {
   it('子ども2人 → 世帯人数4人の生活費(341,400円/月)で補完される', () => {
     const d = applyDefaults({ childrenCount: 2 })
     expect(d.monthlyLivingCost).toBe(LIVING_COST_MONTHLY.byMembers[4])
+  })
+
+  it('独身・子0人 → 単身世帯の生活費・本人分のみの年金で補完される', () => {
+    const d = applyDefaults({ hasSpouse: false })
+    expect(d.monthlyLivingCost).toBe(LIVING_COST_MONTHLY.single) // 169,547
+    expect(d.pensionMonthly).toBe(PENSION_MONTHLY.selfModel) // 166,671(本人分のみ)
+  })
+
+  it('配偶者あり・子0人 → 2人世帯の生活費・年金は本人分+配偶者分(=モデル年金)', () => {
+    const d = applyDefaults({ hasSpouse: true })
+    expect(d.monthlyLivingCost).toBe(LIVING_COST_MONTHLY.byMembers[2])
+    // 検算: selfModel(166,671) + spouseBasic(70,608) = 237,279 = modelCouple
+    expect(d.pensionMonthly).toBe(PENSION_MONTHLY.selfModel + PENSION_MONTHLY.spouseBasic)
+    expect(d.pensionMonthly).toBe(PENSION_MONTHLY.modelCouple)
+  })
+
+  it('独身・子1人 → 世帯人数2人の生活費で補完される', () => {
+    const d = applyDefaults({ hasSpouse: false, childrenCount: 1 })
+    expect(d.monthlyLivingCost).toBe(LIVING_COST_MONTHLY.byMembers[2])
+  })
+})
+
+describe('householdSize / livingCostDefault（表示と計算で共有するヘルパー）', () => {
+  it('世帯人数 = 本人(+配偶者) + 子ども。子どもは0〜4にクランプ', () => {
+    expect(householdSize(false, 0)).toBe(1) // 独身
+    expect(householdSize(true, 0)).toBe(2) // 夫婦
+    expect(householdSize(true, 2)).toBe(4)
+    expect(householdSize(true, 9)).toBe(6) // 子は4にクランプ → 2+4=6
+    expect(householdSize(false, -3)).toBe(1) // 負数もクランプ
+  })
+
+  it('生活費の既定値は世帯人数に対応する（1人=単身、上限6人）', () => {
+    expect(livingCostDefault(false, 0)).toBe(LIVING_COST_MONTHLY.single)
+    expect(livingCostDefault(true, 0)).toBe(LIVING_COST_MONTHLY.byMembers[2])
+    expect(livingCostDefault(true, 4)).toBe(LIVING_COST_MONTHLY.byMembers[6])
   })
 })
 
